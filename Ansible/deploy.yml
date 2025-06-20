@@ -55,14 +55,25 @@
         ports:
           - "80:80"
 
+    - name: Install MySQL Client (needed for DB import)
+      yum:
+        name: mysql
+        state: present
+
     - name: Copy DB schema file to EC2
       copy:
         src: ../OnlineMovieTicketBooking-Python/DATABASE FILE/dbtheatre.sql
         dest: /home/ec2-user/dbtheatre.sql
 
-    - name: Import schema into MySQL inside container
+    - name: Create database if not exists (from host into container)
       shell: |
-        docker exec movie-booking-app mysql -u root -e "CREATE DATABASE IF NOT EXISTS dbtheatre;"
-        docker exec -i movie-booking-app mysql -u root dbtheatre < /home/ec2-user/dbtheatre.sql
+        docker exec movie-booking-app sh -c "mysql -u root -e 'CREATE DATABASE IF NOT EXISTS dbtheatre;'"
+      args:
+        executable: /bin/bash
+
+    - name: Import DB schema into container MySQL
+      shell: |
+        docker cp /home/ec2-user/dbtheatre.sql movie-booking-app:/dbtheatre.sql
+        docker exec movie-booking-app sh -c "mysql -u root dbtheatre < /dbtheatre.sql"
       args:
         executable: /bin/bash
