@@ -1,0 +1,97 @@
+name: Terraform EC2 Deploy
+
+on:
+  push:
+    paths:
+      - 'Terraform/**'
+    branches:
+      - main
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: Terraform/
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.5.7
+
+      - name: Terraform Init
+        run: terraform init
+        # Optional: Configure backend here if you have one
+
+      - name: Terraform Validate
+        run: terraform validate
+
+      - name: Terraform Plan
+        run: terraform plan -out=tfplan
+
+      - name: Import existing Security Group
+        run: |
+          SG_NAME="ec2-ssh-http-sg"
+          SG_ID=$(aws ec2 describe-security-groups --filters Name=group-name,Values=$SG_NAME --query 'SecurityGroups[0].GroupId' --output text)
+          if [ "$SG_ID" != "None" ]; then
+            echo "Importing existing Security Group: $SG_NAME with ID $SG_ID"
+            terraform import aws_security_group.ec2_sg $SG_ID || echo "Already imported or failed"
+          else
+            echo "Security Group $SG_NAME not found, skipping import"
+          fi
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+
+      - name: Import existing EC2 Instance Server
+        run: |
+          INSTANCE_ID=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=SSM-Only-EC2" --query 'Reservations[0].Instances[0].InstanceId' --output text)
+          if [ "$INSTANCE_ID" != "None" ]; then
+            echo "Importing existing EC2 Instance: $INSTANCE_ID"
+            terraform import aws_instance.ssm_ec2 $INSTANCE_ID || echo "Already imported or failed"
+          else
+            echo "EC2 instance not found, skipping import"
+          fi
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+
+      - name: Import existing IAM Role
+        run: |
+          ROLE_NAME="ssm-ec2-role"
+          aws iam get-role --role-name $ROLE_NAME && \
+          terraform import aws_iam_role.ssm_role $ROLE_NAME || echo "IAM Role not found or already imported"
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+
+      - name: Import existing IAM Instance Profile
+        run: |
+          PROFILE_NAME="ssm-ec2-profile"
+          aws iam get-instance-profile --instance-profile-name $PROFILE_NAME && \
+          terraform import aws_iam_instance_profile.ssm_profile $PROFILE_NAME || echo "Instance Profile not found or already imported"
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve tfplan

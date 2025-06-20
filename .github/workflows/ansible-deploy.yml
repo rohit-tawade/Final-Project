@@ -1,0 +1,48 @@
+name: Ansible Deploy
+
+on:
+  push:
+    paths:
+      - "Ansible/**"
+      - ".github/workflows/ansible-deploy.yml"
+
+jobs:
+  ansible:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: Ansible/
+
+    steps:
+      - name: ✅ Checkout Code
+        uses: actions/checkout@v4
+
+      - name: ✅ Install Ansible and SSH
+        run: sudo apt-get update && sudo apt-get install -y ansible openssh-client
+
+      - name: ✅ Setup SSH Key from Secret
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/Linux-Key.pem
+          chmod 600 ~/.ssh/Linux-Key.pem
+        env:
+          ANSIBLE_HOST_KEY_CHECKING: "False"
+
+      - name: ✅ Install Python 3.8 on EC2 (via raw yum)
+        run: |
+          ansible web -i inventory.ini -m raw -a "sudo amazon-linux-extras enable python3.8 && sudo yum clean metadata && sudo yum install -y python38" --private-key ~/.ssh/Linux-Key.pem
+        env:
+          ANSIBLE_HOST_KEY_CHECKING: "False"
+
+      - name: ✅ Ping EC2 with Ansible
+        run: |
+          ansible web -i inventory.ini -m ping --private-key ~/.ssh/Linux-Key.pem
+        env:
+          ANSIBLE_HOST_KEY_CHECKING: "False"
+
+      - name: ✅ Run Ansible Playbook
+        run: |
+          ansible-playbook -i inventory.ini deploy.yml --private-key ~/.ssh/Linux-Key.pem
+        env:
+          ANSIBLE_HOST_KEY_CHECKING: "False"
