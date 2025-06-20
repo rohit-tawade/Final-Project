@@ -41,13 +41,13 @@
           - docker==6.1.3
         executable: pip3
 
-    - name: Install MySQL Client (Amazon Linux 2)
+    - name: Install MySQL client using default Amazon Linux repos
       shell: |
-        sudo yum install -y https://dev.mysql.com/get/mysql80-community-release-el7-3.noarch.rpm
-        sudo rpm --import https://repo.mysql.com/RPM-GPG-KEY-mysql-2022
+        sudo yum clean all
         sudo yum install -y mysql
       args:
         executable: /bin/bash
+
 
     - name: Pull Docker image from Docker Hub
       docker_image:
