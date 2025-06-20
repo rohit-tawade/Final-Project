@@ -7,7 +7,7 @@
 
   tasks:
 
-    - name: Install Docker on Amazon Linux
+    - name: Install Docker on Amazon Linux 2
       shell: |
         sudo amazon-linux-extras enable docker
         sudo yum clean metadata
@@ -41,6 +41,13 @@
           - docker==6.1.3
         executable: pip3
 
+    - name: Install MySQL Client (Amazon Linux 2 or 2023)
+      shell: |
+        sudo yum install -y https://dev.mysql.com/get/mysql80-community-release-el7-3.noarch.rpm || true
+        sudo yum install -y mysql
+      args:
+        executable: /bin/bash
+
     - name: Pull Docker image from Docker Hub
       docker_image:
         name: rohitdocker143/movie-booking-app
@@ -55,24 +62,14 @@
         ports:
           - "80:80"
 
-    - name: Install MySQL Client (Amazon Linux 2 or 2023)
-      shell: |
-        if command -v dnf &> /dev/null; then
-          sudo dnf install -y mysql
-        else
-          sudo yum install -y mysql
-        fi
-      args:
-        executable: /bin/bash
-
     - name: Copy DB schema file to EC2
       copy:
         src: ../OnlineMovieTicketBooking-Python/DATABASE FILE/dbtheatre.sql
         dest: /home/ec2-user/dbtheatre.sql
 
-    - name: Import schema into MySQL inside container
+    - name: Import schema into MySQL from EC2 host
       shell: |
-        docker exec movie-booking-app bash -c "mysql -u root -e 'CREATE DATABASE IF NOT EXISTS dbtheatre;'"
-        docker exec -i movie-booking-app bash -c "mysql -u root dbtheatre" < /home/ec2-user/dbtheatre.sql
+        mysql -u root -e 'CREATE DATABASE IF NOT EXISTS dbtheatre;'
+        mysql -u root dbtheatre < /home/ec2-user/dbtheatre.sql
       args:
         executable: /bin/bash
