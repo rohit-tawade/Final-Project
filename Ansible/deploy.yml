@@ -49,7 +49,6 @@
       args:
         executable: /bin/bash
 
-
     - name: Pull Docker image from Docker Hub
       docker_image:
         name: rohitdocker143/movie-booking-app
